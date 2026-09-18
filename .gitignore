@@ -1,0 +1,8 @@
+# Cookies de sesión de COpenMed: credencial, nunca se commitea
+docs/copenmed/.cookies.json
+docs/copenmed/.operations.jsonl
+
+# Python
+__pycache__/
+*.pyc
+.venv/
