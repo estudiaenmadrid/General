@@ -5,8 +5,9 @@ confirme antes de aplicar ninguna corrección real — el nivel de autonomía
 por defecto (ver docs/copenmed/README.md) es "auditar y listar primero".
 Ninguna función de este módulo escribe en la API.
 
-Las reglas R1-R10 referenciadas están documentadas con detalle en
-docs/copenmed/PLAYBOOK.md, sección 5.
+Las reglas R1-R10 (correcciones estructurales) están documentadas en
+docs/copenmed/PLAYBOOK.md sección 5; las reglas R11-R16 (política de
+creación/calidad de entidades, 2026-09-18) en la sección 6 del mismo archivo.
 """
 
 from __future__ import annotations
@@ -157,6 +158,57 @@ def detectar_tipo_singular_plural_sospechoso(entidades: list[dict[str, Any]]) ->
     return hallazgos
 
 
+def detectar_relaciones_sin_direccion_clara(client, ids_entidad: list[int], id_estudiante: int | None = None) -> list[dict[str, Any]]:
+    """Regla R13: 'is seen with' y similares están prohibidos por defecto, no solo desaconsejados."""
+    id_estudiante = id_estudiante or client.id_estudiante
+    TIPOS_PROHIBIDOS = {"Disease1 is seen with Disease2", "Group1 is seen with Group2"}
+    hallazgos = []
+    for id_entidad in ids_entidad:
+        resp = client.buscar_asociaciones(id_entidad1=id_entidad, id_estudiante=id_estudiante, page_size=200)
+        for a in resp["data"]:
+            if a.get("TipoAsociacion") in TIPOS_PROHIBIDOS:
+                hallazgos.append(
+                    {
+                        "regla": "R13",
+                        "id_asociacion": a["IdAsociacion"],
+                        "mensaje": "Tipo sin dirección/orden claro, prohibido por defecto; buscar alternativa causal/evolutiva/diagnóstica/jerárquica.",
+                        "asociacion": a,
+                    }
+                )
+    return hallazgos
+
+
+def detectar_relaciones_debiles(client, ids_entidad: list[int], id_estudiante: int | None = None, umbral: float = 0.4) -> list[dict[str, Any]]:
+    """Regla R14: no mantener asociaciones con Nivel por debajo del umbral (por defecto 0.4)."""
+    id_estudiante = id_estudiante or client.id_estudiante
+    hallazgos = []
+    for id_entidad in ids_entidad:
+        resp = client.buscar_asociaciones(id_entidad1=id_entidad, id_estudiante=id_estudiante, page_size=200)
+        for a in resp["data"]:
+            nivel = a.get("Nivel")
+            if nivel is not None and nivel < umbral:
+                hallazgos.append(
+                    {
+                        "regla": "R14",
+                        "id_asociacion": a["IdAsociacion"],
+                        "mensaje": f"Nivel {nivel} por debajo del umbral {umbral}; revisar si debe reforzarse o eliminarse.",
+                        "asociacion": a,
+                    }
+                )
+    return hallazgos
+
+
+def buscar_candidatos_duplicado(client, terminos: list[str], page_size: int = 20) -> dict[str, list[dict[str, Any]]]:
+    """Regla R11: antes de crear una entidad nueva, buscar candidatos por nombre/sinónimo.
+
+    `terminos` es una lista de cadenas a probar (nombre completo, sinónimos,
+    traducción). Devuelve, por término, las entidades que ya existen con un
+    nombre parecido — para revisión manual antes de decidir si es un
+    duplicado. No decide nada por sí solo.
+    """
+    return {termino: client.buscar_entidades(filtro=termino, page_size=page_size)["data"] for termino in terminos}
+
+
 def auditoria_completa(client, entidades: list[dict[str, Any]]) -> dict[str, Any]:
     """Ejecuta todas las auditorías de solo lectura y devuelve un informe único.
 
@@ -173,4 +225,6 @@ def auditoria_completa(client, entidades: list[dict[str, Any]]) -> dict[str, Any
         "R5_posible_fusion_conceptos": detectar_posible_fusion_conceptos(entidades),
         "R6_tipo_sospechoso": detectar_tipo_singular_plural_sospechoso(entidades),
         "R10_sin_descripcion": detectar_asociaciones_sin_descripcion(client, ids_entidad),
+        "R13_sin_direccion_clara": detectar_relaciones_sin_direccion_clara(client, ids_entidad),
+        "R14_relaciones_debiles": detectar_relaciones_debiles(client, ids_entidad),
     }

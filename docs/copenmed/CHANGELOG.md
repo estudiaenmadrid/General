@@ -40,3 +40,13 @@ Pendientes de esta sesión: ver checklist en `STATE.md`.
   que el traspaso entre sesiones de Claude Code sea vía git en vez de
   re-pegar texto.
 - No se realizó ninguna llamada a la API de COpenMed en este paso.
+
+## 2026-09-18 — trabajo de entidades (sesión en curso)
+
+Registro en vivo de las operaciones de escritura reales sobre COpenMed en
+esta sesión de Claude Code, bajo la nueva política de creación/calidad de
+entidades (ver `PLAYBOOK.md` sección 6 y `STATE.md`). Se actualiza a medida
+que ocurre cada operación, no al final.
+
+*(sin operaciones todavía — aún no se han recibido las cookies de sesión ni
+se ha retomado trabajo real sobre entidades)*

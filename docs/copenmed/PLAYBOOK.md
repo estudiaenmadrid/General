@@ -201,11 +201,99 @@ el usuario pidió "auditar y listar primero", ver `README.md`).
 
 ---
 
-## 6. Patrones de trabajo eficientes
+## 6. Política de creación y calidad de entidades (usuario, 2026-09-18)
+
+Reglas obligatorias para toda creación o modificación de entidades a partir
+de esta fecha. Sustituyen/amplían cualquier criterio menos estricto usado
+antes.
+
+### R11 — Comprobación de duplicados antes de crear
+Antes de crear cualquier entidad nueva:
+1. Buscar candidatos por nombre y sinónimos parecidos (`entidad/?filter=...`
+   y/o la caché local, ver sección 7 punto 1) — no solo coincidencia exacta.
+2. Leer las candidatas y confirmar si son o no el mismo concepto clínico.
+3. Si es duplicado de una entidad **ya existente y aprobada/antigua**: no
+   crear una nueva. Reportarlo al usuario para que su tutor la elimine (ver
+   procedimiento abajo).
+4. Si es duplicado de otra entidad **propia, ambas sin aprobar**: se puede
+   fusionar directamente (delete + reasignar asociaciones), sin necesidad de
+   tutor, salvo que el usuario indique lo contrario.
+
+**Procedimiento cuando hay que pedir al tutor que elimine una entidad**
+(duplicado confirmado contra una entidad de otro estudiante o ya aprobada):
+1. Volcar TODO el contenido útil de la entidad duplicada en la entidad
+   correcta/pertinente que va a sobrevivir: sinónimos (`detalle-entidad`) que
+   no existan ya allí, descripciones, recursos (`recurso`), y reasignar cada
+   asociación de la duplicada hacia la entidad correcta (delete + create con
+   el mismo tipo/dirección/descripción, apuntando al ID correcto).
+2. Dejar la entidad marcada para eliminar **solo con su nombre** — sin
+   sinónimos adicionales, sin descripciones, sin recursos, sin asociaciones.
+   Esto es lo único que debe quedar en ella para que el tutor la borre sin
+   pérdida de información.
+3. Informar al usuario: qué entidad hay que eliminar (ID + nombre), a favor
+   de qué entidad se fusionó, y qué se volcó exactamente.
+4. Nunca borrar tú mismo una entidad que no es propia — solo el tutor puede.
+
+### R12 — Prioridad de entidades antiguas
+Ante un posible duplicado o solapamiento, la entidad **antigua/preexistente
+tiene prioridad**: se reutiliza y enlaza en vez de crear una nueva. Única
+excepción: si el `IdTipoEntidad` de la entidad antigua es incorrecto para el
+uso que se necesita. En ese caso:
+- Si la entidad antigua es propia → corregir su tipo (regla R6) en vez de
+  duplicar.
+- Si es de otro estudiante o ya aprobada → no se puede retipar; valorar con
+  el usuario si crear una entidad nueva correctamente tipada es la única
+  salida, dejando constancia de por qué no se reutilizó la antigua.
+
+### R13 — Relaciones sin dirección/orden claro: evitar a toda costa
+Los tipos "is seen with" (`291`, `294`) y cualquier otro tipo que no
+establezca una dirección u orden claro entre las dos entidades quedan
+**prohibidos por defecto**, no solo desaconsejados. Antes de usarlos, agotar
+la lista completa de `tipo-asociacion/relationship/{id1}/{id2}` buscando una
+alternativa causal/evolutiva/diagnóstica/jerárquica precisa. Si de verdad no
+existe ninguna alternativa razonable, no crear la asociación en absoluto
+(ver R15 — no forzar relaciones).
+
+### R14 — Fuerza (`Nivel`) de las asociaciones
+`Nivel` va de `0` a `1` (`1` = relación más fuerte). Reglas:
+- No crear ni mantener asociaciones con `Nivel < 0.4`.
+- Formato numérico con **punto decimal**, nunca coma (`0.7`, no `0,7`) — el
+  body de la API es JSON y espera `float` con punto.
+
+### R15 — No forzar relaciones ni inventar contenido
+Objetivo orientativo: al menos **10 asociaciones entrantes y 10 salientes**
+por entidad. Es un objetivo, no un mínimo obligatorio: si tras buscar
+honestamente no hay más relaciones clínicamente justificables, se deja como
+está. Nunca inventar una relación, fuente o dato para completar un cupo.
+
+### R16 — Contenido mínimo de cada entidad
+Al crear o modificar una entidad, dejarla con:
+- **Nombres** (`detalle-entidad`) en español e inglés, incluyendo sinónimos
+  relevantes marcados con el índice de especificidad correcto (`0`, `1` o
+  `2` según el nivel de especificidad del término). *Pendiente de
+  confirmar el nombre exacto del campo en la API la primera vez que se
+  trabaje con `detalle-entidad` en esta política — verificar la respuesta de
+  `GET detalle-entidad/?search[IdEntidad]={id}` en busca de un campo de
+  nivel/especificidad y documentarlo aquí en cuanto se confirme.*
+- El **código CIE** correspondiente incluido junto al nombre.
+- **Descripciones científicas** en español e inglés (nivel científico, no
+  divulgativo simplificado).
+- **5 fuentes fiables** (`recurso`): clínicas, laboratorios, papers
+  científicos o páginas de divulgación científica seria. No menos, salvo que
+  el usuario apruebe una excepción puntual.
+- Relaciones entrantes/salientes suficientes según R15.
+
+---
+
+## 7. Patrones de trabajo eficientes
 
 1. **Caché local para búsqueda de candidatos**: si se dispone de un export
-   (CSV/SQLite) de entidades, buscar ahí primero es mucho más rápido que
-   `entidad/?filter=` repetido contra la API.
+   (CSV/SQLite) de todas las entidades indexadas en COpenMed, buscar ahí
+   primero es mucho más rápido que `entidad/?filter=` repetido contra la
+   API. Desde la política de la sección 6, esta caché ya no es solo una
+   optimización de velocidad: es la base de la comprobación de duplicados
+   (R11) y de encontrar relaciones más completas al crear entidades nuevas.
+   Ver `STATE.md` para el estado de disponibilidad de este export.
 2. **Verificar antes de crear**: siempre `GET tipo-asociacion/relationship/{id1}/{id2}`
    antes de `POST asociacion/create`. Nunca crear "a ciegas".
 3. **Lotes moderados**: agrupar 6-10 pares por llamada de verificación de
@@ -213,10 +301,8 @@ el usuario pidió "auditar y listar primero", ver `README.md`).
 4. **No crear vínculos "hermana↔hermana"** entre subcategorías de un mismo
    bloque salvo que sea estrictamente jerárquico (padre-hijo) — instrucción
    explícita del usuario; genera ruido y puede producir ciclos (R3).
-5. **Evitar "is seen with" (291/294) como comodín**: casi siempre existe un
-   tipo más preciso (causal, evolutivo, diagnóstico) en
-   `tipo-asociacion/relationship`. Revisar la lista completa antes de
-   conformarse con "seen with".
+5. **"is seen with" (291/294) y relaciones sin dirección clara: prohibidas
+   por defecto**, no solo desaconsejadas — ver regla R13 en la sección 6.
 6. **Reintentos tras fallo de red**: comprobar primero si la operación
    anterior sí se guardó (GET de verificación) antes de reintentar el mismo
    `create`, para no producir duplicados (R8). El cliente
